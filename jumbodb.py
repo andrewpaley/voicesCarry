@@ -7,6 +7,22 @@ from pprint import pprint as pp
 from random import randint
 from time import sleep
 
+# eventually this next thing will be useless, but for training, these are the people to return:
+peopleForTraining = [
+    {"first_name": "Elizabeth", "last_name": "Warren" , "party": "D"},
+    {"first_name": "Bernard", "last_name": "Sanders" , "party": "D"},
+    {"first_name": "Donald", "last_name": "Trump" , "party": "R"},
+    {"first_name": "Sarah", "last_name": "Huckabee Sanders" , "party": "R"},
+    {"first_name": "Marco", "last_name": "Rubio" , "party": "R"},
+    {"first_name": "Lisa", "last_name": "Murkowski" , "party": "R"},
+    {"first_name": "Mitch", "last_name": "McConnell" , "party": "R"},
+    {"first_name": "Ted", "last_name": "Cruz" , "party": "R"},
+    {"first_name": "Maxine", "last_name": "Waters" , "party": "D"},
+    {"first_name": "Nancy", "last_name": "Pelosi" , "party": "D"},
+    {"first_name": "Paul", "last_name": "Ryan" , "party": "R"},
+]
+
+
 class JumboDB(object):
     def __init__(self, db="horton.db"):
         self.db = db
@@ -121,11 +137,27 @@ class JumboDB(object):
             self.create(type, row)
 
     def getAll(self, tn):
+        if tn == "people":
+            return self.trainingPeopleOnly()
         self._openDatabase()
         loadedCursor = self.c.execute("SELECT * FROM "+tn)
         payload = self._queryToJSON(loadedCursor)
         self._closeDatabase()
         return payload
+
+    def trainingPeopleOnly(self):
+        # HACK! TEMPORARY!
+        # This is a hack for early development
+        # Eventually we'll cover all people
+        # Until then, let's focus on a few key figures
+        # Do this as db query results so no one else has to care this is different
+        global peopleForTraining
+        foundPeople = []
+        for personInfo in peopleForTraining:
+            foundPerson = self.find("people", personInfo)
+            if foundPerson:
+                foundPeople.append(foundPerson[0])
+        return foundPeople
 
     def getOne(self, tn, id):
         if not id: return False
@@ -221,20 +253,7 @@ class Trunk(object):
     def __init__(self):
         self.newsapi = NewsApiClient(api_key='b9faafb8977145a8a9a32d797792dc65')
         self.jdb = JumboDB()
-        # eventually this next thing will be everyone, but for training:
-        self.peopleForTraining = [
-            {"first_name": "Elizabeth", "last_name": "Warren" , "party": "D"},
-            {"first_name": "Bernard", "last_name": "Sanders" , "party": "D"},
-            {"first_name": "Donald", "last_name": "Trump" , "party": "R"},
-            {"first_name": "Sarah", "last_name": "Huckabee Sanders" , "party": "R"},
-            {"first_name": "Marco", "last_name": "Rubio" , "party": "R"},
-            {"first_name": "Lisa", "last_name": "Murkowski" , "party": "R"},
-            {"first_name": "Mitch", "last_name": "McConnell" , "party": "R"},
-            {"first_name": "Ted", "last_name": "Cruz" , "party": "R"},
-            {"first_name": "Maxine", "last_name": "Waters" , "party": "D"},
-            {"first_name": "Nancy", "last_name": "Pelosi" , "party": "D"},
-            {"first_name": "Paul", "last_name": "Ryan" , "party": "R"},
-        ]
+
         self.keywordSets = self.buildOutQuerySets()
 
     def loadDataFromLastTwoDays(self):
@@ -251,7 +270,7 @@ class Trunk(object):
 
     def buildOutQuerySets(self):
         topics = self.jdb.getAll("topics")
-        people = self.peopleForTraining # someday will be a db call
+        people = self.jdb.getAll("people")
         querySet = []
         for person in people:
             pstring = person["first_name"]+" "+person["last_name"]
