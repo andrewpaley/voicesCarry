@@ -21,9 +21,10 @@ peopleForTraining = [
     {"first_name": "Maxine", "last_name": "Waters" , "party": "D"},
     {"first_name": "Nancy", "last_name": "Pelosi" , "party": "D"},
     {"first_name": "Paul", "last_name": "Ryan" , "party": "R"},
+    {"first_name": "Kellyanne", "last_name": "Conway" , "party": "R"}
 ]
 
-DEV_MODE = True
+VERBOSE_MODE = True
 FORCE_NEWSAPI_REFRESH = False
 
 class JumboDB(object):
@@ -87,7 +88,7 @@ class JumboDB(object):
         self.uniqueKeyMap = {
             "people": ["first_name", "last_name", "party"],
             "topics": ["topic"],
-            "articles": ["source_link", "article_summary"],
+            "articles": ["source_link", "article_body"],
             "article_topic": ["article_id", "topic_id"],
             "article_person": ["article_id", "person_id"],
             "cached_newsapi_queries": ["query", "from_date", "to_date"]
@@ -150,7 +151,7 @@ class JumboDB(object):
         # thus, just return the story we already have rather than write a new one to the db from a different url
         matchSet1 = self.find("articles", {"source_link": vals["source_link"]})
         if len(matchSet1) > 0: return True, matchSet1
-        matchSet2 = self.find("articles", {"source_link": vals["article_summary"]})
+        matchSet2 = self.find("articles", {"article_body": vals["article_body"]})
         if len(matchSet2) > 0: return True, matchSet2
         return False, []
 
@@ -190,7 +191,7 @@ class JumboDB(object):
         self._closeDatabase()
         return payload
 
-    def find(self, tn, vals):
+    def find(self, tn, vals, context=False):
         if not id: return False
         cleanedVals = {}
         for key, val in vals.items():
@@ -205,7 +206,10 @@ class JumboDB(object):
             valList.append(val)
             if counter < len(cleanedVals)-1: queryStr += " AND "
             counter += 1
-        loadedCursor = self.c.execute(queryStr, tuple(valList))
+        try:
+            loadedCursor = self.c.execute(queryStr, tuple(valList))
+        except:
+            breakpoint()
         payload = self._queryToJSON(loadedCursor)
         self._closeDatabase()
         return payload
@@ -272,7 +276,7 @@ class JumboDB(object):
         rows = self.find("article_person", {"person_id": pid})
         articles = []
         for row in rows:
-            people.append(self.getOne("people", row["article_id"]))
+            articles.append(self.getOne("articles", row["article_id"]))
         return articles
 
 # a helper object for querying/loading stories into JumboDB
@@ -280,8 +284,14 @@ class Trunk(object):
     def __init__(self):
         self.newsapi = NewsApiClient(api_key='b9faafb8977145a8a9a32d797792dc65')
         self.jdb = JumboDB()
-
         self.keywordSets = self.buildOutQuerySets()
+
+    def print(self, statement):
+        print(statement)
+
+    def suckUp(self, timeFrame="lastTwoDays"):
+        if timeFrame == "lastTwoDays":
+            self.loadDataFromLastTwoDays()
 
     def loadDataFromLastTwoDays(self):
         today = datetime.now().strftime('%Y-%m-%d')
@@ -290,7 +300,7 @@ class Trunk(object):
         # for keywordSet in self.keywordSets[0:1]:
             self.loadStoriesFor(self.queryBuilder(keywordSet), keywordSet, yesterday, today)
             # don't overload the api...sleep for 1 to 3 seconds between each call
-            sleep(randint(0,2))
+            # sleep(randint(0,1))
 
     def loadDataSinceLastRun(self):
         # TODO: find the last date there are articles for in the articles table, and run all the days since then
@@ -314,12 +324,13 @@ class Trunk(object):
         return query
 
     def loadStoriesFor(self, query, keywordSet, from_date, to_date):
-        if DEV_MODE: print("getting stories for: "+str(query))
+        self.print("\n\n ============================================== \n\n")
+        self.print("Getting stories for: "+str(query))
         stories = self.getStoriesFor(query, from_date, to_date)
-        if DEV_MODE: print("got this many stories for "+str(query)+": "+str(len(stories)))
+        self.print("Got this many stories for "+str(query)+": "+str(len(stories)))
         if not stories: return None
         for story in stories:
-            if story["article_body"] != "":
+            if story["article_body"] != "" and story["url"] != None:
                 story = self.translateSchemaOfStory(story)
                 article = self.jdb.create("articles", story)
                 self.createLinksToArticle(keywordSet, article)
@@ -329,30 +340,30 @@ class Trunk(object):
         payload = self.queryNewsAPI(query, from_date, to_date)
         if not payload: return None
         payload = payload["articles"]
-        if DEV_MODE: print("In total, I got this many stories: "+str(len(payload)))
-        if DEV_MODE: print("now getting full text for each story...")
+        self.print("In total, I got this many stories: "+str(len(payload)))
+        self.print("now getting full text for each story...")
         for story in payload:
             # sleep(randint(0,1))
             story["article_body"] = self.getFullStory(story["url"])
         return payload
 
     def getFullStory(self, url):
-        if DEV_MODE: print("Seeing if I have full story for: "+str(url))
+        self.print("Seeing if I have full story for: "+str(url))
         # first, see if we already have this article
         # if so, just return it and the create call downstream will prevent duplication
         matches = self.jdb.find("articles", {"source_link": url})
         if len(matches) > 0:
-            if DEV_MODE: print("I already have a story for this link. No call to the api necessary.")
+            self.print("I already have a story for this link. No call to the api necessary.")
             return matches[0]["article_body"]
         try:
-            if DEV_MODE: print("don't already have the full story...will try to get it...")
+            self.print("Don't already have the full story...will try to get it...")
             article = Article(url)
             article.download()
             article.parse()
-            if DEV_MODE: print("...got it!")
+            self.print("...got it!")
             return article.text
         except:
-            if DEV_MODE: print("...didn't get it. Moving on!")
+            self.print("...didn't get it. Moving on!")
             return ""
 
     def translateSchemaOfStory(self, story):
@@ -368,20 +379,20 @@ class Trunk(object):
 
     def queryNewsAPI(self, query, from_date, to_date):
         # check the cached_newsapi_queries table to see if you already have results for this one
-        if DEV_MODE: print("Going to return some stories about: "+str(query)+" between "+str(from_date)+" and "+str(to_date))
-        if DEV_MODE: print("First off, do I already have them?")
+        self.print("Going to return some stories about: "+str(query)+" between "+str(from_date)+" and "+str(to_date))
+        self.print("First off, do I already have them?")
         existingPayloads = self.jdb.find("cached_newsapi_queries", {"query": query, "from_date": from_date, "to_date": to_date})
         if FORCE_NEWSAPI_REFRESH == False and len(existingPayloads) > 0 and existingPayloads[0]["payload"] != None:
-            if DEV_MODE: print("I do! I won't bother calling the api then.")
+            self.print("I do! I won't bother calling the api then.")
             return json.loads(existingPayloads[0]["payload"])
-        if DEV_MODE: print("Either I don't, or I'm being told to force a refresh...here we go...")
+        self.print("Either I don't, or I'm being told to force a refresh...here we go...")
         try:
-            if DEV_MODE: print("Calling NewsAPI...")
+            self.print("Calling NewsAPI...")
             newPayload = self.newsapi.get_everything(q=query, from_param=from_date, to=to_date, language='en', sort_by='relevancy')
         except:
-            if DEV_MODE: print("NewsAPI failed for some reason...moving on!")
+            self.print("NewsAPI failed for some reason...moving on!")
             return None
-        if DEV_MODE: print("Got stuff back from NewsAPI!")
+        self.print("Got stuff back from NewsAPI!")
         if len(existingPayloads) > 0:
             # update the existing result rather than make a new entry
             self.jdb.update("cached_newsapi_queries", existingPayloads[0]["id"], {"payload": json.dumps(newPayload)})
