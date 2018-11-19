@@ -1,7 +1,8 @@
 import flask
 from flask import request, jsonify
 from flask import Blueprint
-from jumbodb import JumboDB, Trunk
+from jumbodb import JumboDB
+from trunk import Trunk
 
 jumbo = Blueprint('jumbo', __name__)
 
