@@ -1,15 +1,28 @@
 from jumbodb import JumboDB
 import spacy
 from verbsOfAttribution import verbsOA
+import os
+
+# TODOS:
+# Expand list of people (Deval Patrick, Beto O'Rourke, ...)
+# Expand list of topics (election 2018, ...)
+
 
 class Shepherd(object):
     def __init__(self):
         self.jdb = JumboDB()
         self.nlp = spacy.load("en_coref_md")
-        self.peopleList = [p["last_name"] for p in self.jdb.getAll("people")]
+        self.peopleList = [(p["first_name"], p["last_name"], p["role"], p["state"], p["ranking_role"]) for p in self.jdb.getAll("people")]
+        self.flatPeopleList = self.prepPeopleList()
         self.topicList = [t["topic"] for t in self.jdb.getAll("topics")]
         self.verbsOfAttribution = verbsOA
         self.presentArticle()
+
+    def prepPeopleList(self):
+        stopList = ["of", "the", "to"]
+        peopleSplat = [value for personVals in self.peopleList for value in personVals if value != None]
+        peopleDeepSplat = [word for strng in peopleSplat for word in strng.split(" ") if word not in stopList]
+        return list(set(peopleDeepSplat))
 
     def presentArticle(self):
         self.snippetList = []
@@ -82,36 +95,52 @@ class Shepherd(object):
             self.jdb.create("snippets", snippet)
 
     def smartSuggest(self, article):
+        if article == None:
+            print("No more articles!")
+            return False
+        print("=====================================\n")
+        print("NEW ARTICLE!")
+        print("=====================================\n")
+        print(article["article_body"])
+        print("=====================================\n")
         sa = self.nlp(article["article_body"])
+        sourceSentences = list(sa.sents)
         article["corefed_body"] = sa._.coref_resolved
-        csa = self.nlp(article["corefed_body"])
-        sentences = list(csa.sents)
-        interestingSents = [sent for sent in sentences if self.verbOrQuoteCheck(sent)]
+        corefSA = self.nlp(article["corefed_body"])
+        corefSentences = list(corefSA.sents)
+        # interestingSents = [sent for sent in corefSentences if self.interestingSnippetCheck(sent)]
+        interestingSents = [sent for sent in sourceSentences if self.interestingSnippetCheck(sent)]
         for sent in interestingSents:
+            os.system("cls" if os.name == "nt" else "clear")
+            print("=====================================\n")
             print(sent)
-            response = self.requestWith("Does this look like a quote?")
+            print("=====================================\n")
+            response = self.requestWith("Does this look like a quote? (y/n) ")
             if response == "y" or response == "nbs": # second one is "no but save"
                 # confirm followup questions about topic_id / person_id
                 # store the snippet
-                self.storeSnippetFromSpacy(sent, article)
+                type = "quote" if response == "y" else "non_quote"
+                person_id = self.requestWith("Which person is the speaker (enter id or leave blank for null): ")
+                topic_id = self.requestWith("What's the topic (enter id or leave blank for null): ")
+                # self.storeSnippetFromSpacy(sourceSentences[corefSentences.index(sent)], article, person_id, topic_id, type)
+                self.storeSnippetFromSpacy(sent, article, person_id, topic_id, type)
         self.jdb.markArticleShepherded(article)
+        self.smartSuggest(self.jdb.getUnshepherdedArticle())
 
-    def storeSnippetFromSpacy(self, sent, article):
-        # TODO
-        breakpoint()
+    def storeSnippetFromSpacy(self, sentence, article, person_id=None, topic_id=None, type="quote"):
         snippet = {
-            "snippet": snippet,
-            "person_id": 0,
-            "topic_id": 0,
-            "source_id": article[id],
+            "snippet": sentence.text,
+            "person_id": person_id,
+            "topic_id": topic_id,
+            "source_id": article["id"],
             "approved": 1,
             "deleted": 0,
-            "is_quote": 0
+            "is_quote": 1 if type == "quote" else 0
         }
-        return False
+        return self.jdb.create("snippets", snippet)
 
-    def verbOrQuoteCheck(self, spacyText):
-        return (self.verbMatch(spacyText) or self.quoteCheck(spacyText))
+    def interestingSnippetCheck(self, spacyText):
+        return self.personOfInterestCheck(spacyText) and (self.verbMatch(spacyText) or self.quoteCheck(spacyText))
 
     def verbMatch(self, spacyText):
         keyLemmas = [word.lemma_ for word in spacyText if word.pos_ == "VERB"]
@@ -123,10 +152,13 @@ class Shepherd(object):
         quoteTokens = [token for token in spacyText if token.is_quote]
         return len(quoteTokens) > 0
 
+    def personOfInterestCheck(self, spacyText):
+        matches = [word.text for word in spacyText if word.text in self.flatPeopleList]
+        return len(matches) > 0
 
     def requestWith(self, prompt):
         print(prompt)
-        pi = input("(type none if none left, t for topics list, and p for people list): ")
+        pi = input("(for help or other: type none if none left, t for topics list, and p for people list): ")
         if pi == "none":
             return None
         elif pi == "t":
@@ -148,7 +180,7 @@ class Shepherd(object):
         people = self.jdb.getAll("people")
         print("People list:")
         for person in people:
-            print(person["first_name"] + "" + person["last_name"] + ": " + str(person["id"]))
+            print(person["first_name"] + " " + person["last_name"] + ": " + str(person["id"]))
         print("==============")
 
 if __name__ == "__main__":

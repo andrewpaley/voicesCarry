@@ -7,6 +7,8 @@ from pprint import pprint as pp
 # eventually this next thing will be useless, but for training, these are the people to return:
 peopleForTraining = [
     {"first_name": "Elizabeth", "last_name": "Warren" , "party": "D"},
+    {"first_name": "Joe", "last_name": "Biden" , "party": "D"},
+    {"first_name": "Michael", "last_name": "Bloomberg" , "party": "D"},
     {"first_name": "Bernard", "last_name": "Sanders" , "party": "D"},
     {"first_name": "Donald", "last_name": "Trump" , "party": "R"},
     {"first_name": "Sarah", "last_name": "Huckabee Sanders" , "party": "R"},
