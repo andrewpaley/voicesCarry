@@ -1,5 +1,7 @@
 # Teach the Grok
 
+# NOTE: This is a functionality stub and is currently pulled from a tutorial + stackoverflow answer. Ignore for now, but this will be a blueprint for later attempts at training once the full dataset is in place.
+
 import spacy
 
 nlp = spacy.load('en')
