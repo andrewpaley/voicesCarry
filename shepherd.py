@@ -18,16 +18,16 @@ class Shepherd(object):
         if article == None:
             print("There aren't any articles to present.")
             return False
-        print(art["article_body"])
+        print(article["article_body"])
         print("=====================================\n")
         self.selectMethod(article)
 
     def selectMethod(self, article):
         method = input("Do you want to (b)rowse the full article or let Shepherd (g)uess? (b / g): ")
         if method == "b":
-            self.requestSnippets(art)
+            self.requestSnippets(article)
         else:
-            self.smartSuggest(art)
+            self.smartSuggest(article)
 
     def requestSnippets(self, article):
         # get the quote
@@ -90,13 +90,24 @@ class Shepherd(object):
         for sent in interestingSents:
             print(sent)
             response = self.requestWith("Does this look like a quote?")
-            if response == "y":
+            if response == "y" or response == "nbs": # second one is "no but save"
                 # confirm followup questions about topic_id / person_id
                 # store the snippet
-                self.createSnippetFromSpacy(sent)
+                self.storeSnippetFromSpacy(sent, article)
+        self.jdb.markArticleShepherded(article)
 
-    def createSnippetFromSpacy(sent):
-        # TODO: implement storage now that we're guessing reasonably
+    def storeSnippetFromSpacy(self, sent, article):
+        # TODO
+        breakpoint()
+        snippet = {
+            "snippet": snippet,
+            "person_id": 0,
+            "topic_id": 0,
+            "source_id": article[id],
+            "approved": 1,
+            "deleted": 0,
+            "is_quote": 0
+        }
         return False
 
     def verbOrQuoteCheck(self, spacyText):
@@ -110,13 +121,13 @@ class Shepherd(object):
 
     def quoteCheck(self, spacyText):
         quoteTokens = [token for token in spacyText if token.is_quote]
-        return len(quoteTokens) >0
+        return len(quoteTokens) > 0
 
 
     def requestWith(self, prompt):
         print(prompt)
-        pi = input("(type n if none left, t for topics list, and p for people list): ")
-        if pi == "n":
+        pi = input("(type none if none left, t for topics list, and p for people list): ")
+        if pi == "none":
             return None
         elif pi == "t":
             self.printTopics()
