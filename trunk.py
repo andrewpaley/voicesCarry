@@ -10,6 +10,9 @@ from jumbodb import JumboDB
 
 newsAPIKey = os.getenv("newsAPIKey")
 
+VERBOSE_MODE = True
+FORCE_NEWSAPI_REFRESH = False
+
 # a helper object for querying/loading stories into JumboDB
 class Trunk(object):
     def __init__(self):
@@ -18,7 +21,7 @@ class Trunk(object):
         self.keywordSets = self.buildOutQuerySets()
 
     def print(self, statement):
-        print(statement)
+        if VERBOSE_MODE: print(statement)
 
     def suckUp(self, timeFrame="lastTwoDays"):
         if timeFrame == "lastTwoDays":

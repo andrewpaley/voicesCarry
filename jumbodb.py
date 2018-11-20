@@ -20,9 +20,6 @@ peopleForTraining = [
     {"first_name": "Kellyanne", "last_name": "Conway" , "party": "R"}
 ]
 
-VERBOSE_MODE = True
-FORCE_NEWSAPI_REFRESH = False
-
 class JumboDB(object):
     def __init__(self, db="horton.db"):
         self.db = db
@@ -65,7 +62,8 @@ class JumboDB(object):
             "published_date": "",
             "approved": 0,
             "groked": 0,
-            "discarded": 0
+            "discarded": 0,
+            "shepherded": 0
         })
         self.roughSnippetSchema = OrderedDict({
             "snippet": "",
@@ -91,7 +89,8 @@ class JumboDB(object):
             "topic_id": "",
             "source_id": "",
             "approved": 0,
-            "deleted": 0
+            "deleted": 0,
+            "is_quote": 0
         })
         self.cachedNewsAPIQueriesSchema = OrderedDict({
             "query": "",
@@ -221,14 +220,15 @@ class JumboDB(object):
 
     def find(self, tn, vals=None, maxResults=None):
         if not id: return False
-        cleanedVals = {}
-        for key, val in vals.items():
-            if val != None:
-                cleanedVals[key] = val
         self._openDatabase()
         if not vals:
-            queryStr = "SELEC * FROM "+tn
+            queryStr = "SELECT * FROM "+tn
+            loadedCursor = self.c.execute(queryStr)
         else:
+            cleanedVals = {}
+            for key, val in vals.items():
+                if val != None:
+                    cleanedVals[key] = val
             queryStr = "SELECT * FROM "+tn+" WHERE "
             counter = 0
             valList = []
@@ -237,12 +237,12 @@ class JumboDB(object):
                 valList.append(val)
                 if counter < len(cleanedVals)-1: queryStr += " AND "
                 counter += 1
-        if maxResults:
-            queryStr += " limit "+str(maxResults)
-        try:
-            loadedCursor = self.c.execute(queryStr, tuple(valList))
-        except:
-            breakpoint()
+            if maxResults:
+                queryStr += " limit "+str(maxResults)
+            try:
+                loadedCursor = self.c.execute(queryStr, tuple(valList))
+            except:
+                breakpoint()
         payload = self._queryToJSON(loadedCursor)
         self._closeDatabase()
         return payload
@@ -312,10 +312,12 @@ class JumboDB(object):
             articles.append(self.getOne("articles", row["article_id"]))
         return articles
 
+    # and now, a ton of convenience functions:
+
     def getCountOf(self, tn, vals=None):
         return len(self.find(tn, vals))
 
-    def getCountOfArtcles(self):
+    def getCountOfArticles(self):
         return self.getCountOf("articles")
 
     def getCountOfGoodSnippets(self):
@@ -329,3 +331,16 @@ class JumboDB(object):
 
     def getCountOfGrokedArticles(self):
         return self.getCountOf("articles", {"groked": 1})
+
+    def getCountOfShepherdedArticles(self):
+        return self.getCountOf("articles", {"shepherded": 1})
+
+    def markArticleShepherded(self, article):
+        return self.update("articles", article["id"], {"shepherded": 1})
+
+    def getUnshepherdedArticle(self):
+        arts = self.find("articles", {"shepherded": 0}, 1)
+        if arts:
+            return arts[0]
+        else:
+            return None

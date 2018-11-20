@@ -3,16 +3,16 @@ from datetime import datetime, timedelta
 from pprint import pprint as pp
 from jumbodb import JumboDB
 import spacy
-import corenlp
+# import corenlp
 # import os
 # cnlpServer = os.getenv("cnlpServer")
 # cnlpPort = int(os.getenv("cnlpPort"))
-cnlpAnnotators = "tokenize ssplit pos lemma ner coref quote"
+# cnlpAnnotators = "tokenize ssplit pos lemma ner coref quote"
 
 class Grok(object):
     def __init__(self):
         self.jdb = JumboDB()
-        self.snlp = spacy.load('en_coref_md')
+        self.snlp = spacy.load("en_coref_md")
         # self.cnlp = corenlp.CoreNLPClient(annotators=cnlpAnnotators.split())
         self.snippetSchema = {
             "snippet":"", # text of snippet
