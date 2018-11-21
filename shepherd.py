@@ -115,8 +115,8 @@ class Shepherd(object):
             print("=====================================\n")
             print(sent)
             print("=====================================\n")
-            response = self.requestWith("Does this look like a quote? (y/n) ")
-            if response == "y" or response == "nbs": # second one is "no but save"
+            response = self.requestWith("Does this look like a quote? (y/n -- or leave blank to discard) ")
+            if response == "y" or response == "n": # second one is "no but save"
                 # confirm followup questions about topic_id / person_id
                 # store the snippet
                 type = "quote" if response == "y" else "non_quote"
