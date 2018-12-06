@@ -17,8 +17,11 @@ peopleForTraining = [
     {"first_name": "Mitch", "last_name": "McConnell" , "party": "R"},
     {"first_name": "Ted", "last_name": "Cruz" , "party": "R"},
     {"first_name": "Maxine", "last_name": "Waters" , "party": "D"},
+    {"first_name": "Adam", "last_name": "Schiff" , "party": "D"},
+    {"first_name": "Sherrod", "last_name": "Brown" , "party": "D"},
     {"first_name": "Nancy", "last_name": "Pelosi" , "party": "D"},
     {"first_name": "Paul", "last_name": "Ryan" , "party": "R"},
+    {"first_name": "Ocasio Cortez", "last_name": "Alexandria" , "party": "D"},
     {"first_name": "Kellyanne", "last_name": "Conway" , "party": "R"}
 ]
 
@@ -220,7 +223,7 @@ class JumboDB(object):
         self._closeDatabase()
         return payload
 
-    def find(self, tn, vals=None, maxResults=None):
+    def find(self, tn, vals=None, maxResults=None, mostRecent=False):
         if not id: return False
         self._openDatabase()
         if not vals:
@@ -239,6 +242,8 @@ class JumboDB(object):
                 valList.append(val)
                 if counter < len(cleanedVals)-1: queryStr += " AND "
                 counter += 1
+            if mostRecent == True: # this should only ever hit for articles, at least for now
+                queryStr += " order by published_date desc"
             if maxResults:
                 queryStr += " limit "+str(maxResults)
             try:
@@ -341,7 +346,7 @@ class JumboDB(object):
         return self.update("articles", article["id"], {"shepherded": 1})
 
     def getUnshepherdedArticle(self):
-        arts = self.find("articles", {"shepherded": 0}, 1)
+        arts = self.find("articles", {"shepherded": 0}, 1, True)
         if arts:
             return arts[0]
         else:

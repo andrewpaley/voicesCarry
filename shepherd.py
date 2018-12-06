@@ -2,6 +2,7 @@ from jumbodb import JumboDB
 import spacy
 from verbsOfAttribution import verbsOA
 import os
+import sys
 
 # TODOS:
 # Expand list of people (Deval Patrick, Beto O'Rourke, ...)
@@ -16,7 +17,6 @@ class Shepherd(object):
         self.flatPeopleList = self.prepPeopleList()
         self.topicList = [t["topic"] for t in self.jdb.getAll("topics")]
         self.verbsOfAttribution = verbsOA
-        self.presentArticle()
 
     def prepPeopleList(self):
         stopList = ["of", "the", "to"]
@@ -36,14 +36,17 @@ class Shepherd(object):
         self.selectMethod(article)
 
     def selectMethod(self, article):
-        method = input("Do you want to (b)rowse the full article or let Shepherd (g)uess? (b / g): ")
-        if method == "b":
-            self.requestSnippets(article)
-        else:
-            self.smartSuggest(article)
+        # method = input("Do you want to (b)rowse the full article or let Shepherd (g)uess? (b / g): ")
+        # if method == "b":
+        self.requestSnippets(article)
+        # else:
+        #     self.smartSuggest(article)
 
     def requestSnippets(self, article):
         # get the quote
+        print("\n\n=====================================\n\n")
+        print(article["article_body"])
+        print("=====================================\n")
         snippet = self.requestWith("Are there any snippets in this article worth storing?")
         if not snippet or snippet == "s":
             self.wrapUp(article)
@@ -51,39 +54,39 @@ class Shepherd(object):
             return False
         snippet = {
             "snippet": snippet,
-            "person_id": 0,
-            "topic_id": 0,
-            "source_id": article[id],
+            "person_id": None,
+            "topic_id": None,
+            "source_id": article["id"],
             "approved": 1,
             "deleted": 0,
             "is_quote": 0
         }
 
         # is this a quote?
-        quoteCheck = self.requestWith("Is this a quote or a non-quote snippet for training?")
+        quoteCheck = self.requestWith("Is this a quote? (if not, it'll be a non-quote snippet for training)")
         if not quoteCheck or quoteCheck == "c":
             self.wrapUp(article)
             self.requestQuotes()
             return False
         snippet["is_quote"] = 1 if quoteCheck == "y" else 0
+        if quoteCheck == "y":
+            # get the speaker
+            speaker_id = self.requestWith("Who is the speaker of the quote (give the id)?")
+            if speaker_id == "c" or (speaker_id and self.jdb.getOne("people", speaker_id) == None):
+                self.wrapUp(article)
+                self.requestQuotes()
+                return False
+            snippet["person_id"] = speaker_id
 
-        # get the speaker
-        speaker_id = self.requestWith("Who is the speaker of the quote (give the id)?")
-        if speaker_id == "c" or (speaker_id and self.jdb.getOne("people", speaker_id) == None):
-            self.wrapUp(article)
-            self.requestQuotes()
-            return False
-        snippet["person_id"] = speaker_id
-
-        # get the topic
-        topic_id = self.requestWith("What's the topic (give the id)?")
-        if topic_id == "c" or (topic_id and self.jdb.getOne("topics", topic_id) == None):
-            self.wrapUp(article)
-            self.requestQuotes()
-            return False
-        snippet["topic_id"] = topic_id
-        self.snippetList.append(quote)
-        self.requestSnippets()
+            # get the topic
+            topic_id = self.requestWith("What's the topic (give the id)?")
+            if topic_id == "c" or (topic_id and self.jdb.getOne("topics", topic_id) == None):
+                self.wrapUp(article)
+                self.requestQuotes()
+                return False
+            snippet["topic_id"] = topic_id
+        self.snippetList.append(snippet)
+        self.requestSnippets(article)
 
     def wrapUp(self, article):
         self.saveQuotes()
@@ -185,3 +188,7 @@ class Shepherd(object):
 
 if __name__ == "__main__":
     s = Shepherd()
+    if len(sys.argv) > 1 and sys.argv[1] in ["t","teacher"]:
+        s.teacher()
+    else:
+        s.presentArticle()
