@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from pprint import pprint as pp
 from jumbodb import JumboDB
 from teacher import Teacher
+from cleaner import theCleaner
 from trunk import Trunk
 import spacy
 import sys
@@ -12,6 +13,7 @@ class Grok(object):
         self.latestURL = url
         self.nlp = spacy.load("en_coref_md")
         self.trunk = Trunk()
+        self.cleaner = theCleaner()
         # get and set up teacher
         self.teacher = Teacher()
         self.teacher.loadSavedQuoteClassifier()
@@ -28,7 +30,7 @@ class Grok(object):
         if url:
             self.latestURL = url
             self.latestGuesses = self.grokStory(url)
-            self.storedGuesses = self.storeGuesses()
+            # self.storedGuesses = self.storeGuesses()
             self.reviewGuesses()
         else:
             self.requestStory(True)
@@ -38,8 +40,8 @@ class Grok(object):
         self.latestStoryChunks = self.generateStoryChunkCandidates(self.latestArticle)
         quoteGuesses = []
         for snippet in self.latestStoryChunks:
-            representation = self.teacher.createRepresentation(snippet.text)
-            prediction = self.teacher.classifySnippet(representation)
+            # representation = self.cleaner.createRepresentation(snippet.text)
+            prediction = self.teacher.classifySnippet(snippet.text)
             if prediction["QUOTE"] > 0.5:
                 # return it with the clean text version (?)
                 quoteGuesses.append((prediction["QUOTE"], snippet))
@@ -62,7 +64,7 @@ class Grok(object):
             quoteTokenCount = len(quoteTokens)
             if quoteTokenCount % 2 != 0 and withinQuote == False:
                 # double check
-                quoteCount = self.teacher.cleanUpString(sentence.text).count('"')
+                quoteCount = self.cleaner.cleanUpString(sentence.text).count('"')
                 if quoteCount % 2 == 0:
                     outputSentences.append(sentence)
                 else:
@@ -80,29 +82,33 @@ class Grok(object):
                 outputSentences.append(sentence)
         return outputSentences
 
-    def storeGuesses(self):
-        storedGuesses = []
-        for guess in self.latestGuesses:
-            storedGuesses.append(self.storeSnippet(guess[1], self.latestArticle))
-        return storedGuesses
+    # def storeGuesses(self):
+    #     storedGuesses = []
+    #     for guess in self.latestGuesses:
+    #         storedGuesses.append(self.storeSnippet(guess[1], self.latestArticle))
+    #     return storedGuesses
 
     def reviewGuesses(self): # this is the command line version -- otherwise this would be behind an API
         for i, guess in enumerate(self.latestGuesses):
-            self.confirmQuote(guess, self.storedGuesses[i])
+            self.confirmQuote(guess)
 
-    def confirmQuote(self, guess, storedGuess): # part two of command-line-only version
+    def confirmQuote(self, guess): # part two of command-line-only version
         print("==========")
         print(guess[1])
         print(guess[0])
         print("==========")
         confirmation = input("Is this a quote? (y/n): ")
         if not confirmation:
-            self.confirmQuote(guess, storedGuess)
+            self.confirmQuote(guess)
             return False
         elif confirmation == "n":
-            self.toggleGuess(storedGuess)
+            self.storeSnippet(guess[1], self.latestArticle, type="nonquote")
+            # self.toggleGuess(storedGuess)
         elif confirmation == "p":
-            self.toggleToParaphrase(storedGuess)
+            self.storeSnippet(guess[1], self.latestArticle, type="paraphrase")
+            # self.toggleToParaphrase(storedGuess)
+        elif confirmation == "y":
+            self.storeSnippet(guess[1], self.latestArticle, type="quote")
         else:
             return True
 

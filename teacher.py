@@ -1,7 +1,8 @@
 import spacy
-from spacy.util import minibatch, compounding
+from spacy.util import minibatch, compounding, decaying
 from jumbodb import JumboDB
 from random import shuffle
+from cleaner import theCleaner
 import math
 import sys
 from pathlib import Path
@@ -11,9 +12,9 @@ from pathlib import Path
 
 # GOALS:
 # 1) DONE: recognize individual quotes in text (needs training/testing)
-# 2) TODO (IN PROGRESS): collect more snippets (300, roughly split 2/1 nonquotes/quotes)
+# 2) DONE: collect more snippets (300, roughly split 2/1 nonquotes/quotes)
 # 3) TODO: create alternate representations of quotes for learning and classifying -- (a) remove named entities and (b) create parse tree representation
-# 4) TODO: freeze that model and then use it to do a pass pulling quotes and leading/trailing sentences from articles (grok v1)
+# 4) TODO: freeze that v3/v4 model and then use it to do a pass pulling quotes and leading/trailing sentences from articles (grok v2)
 # 5) TODO: deploy to digitalocean and launch webpage that takes a URL and groks the article
 # 5) FUTURE TODO (post project submit): try training categorizes to recognize a) subject and b) speaker
 # 6) FUTURE TODO (post project submit): store those in a "context_snippets" table in jumbodb and then do a second pass of training to teach the system to recognize good context
@@ -24,6 +25,7 @@ class Teacher(object):
         self.losses = None
         self.textCat = None
         self.jdb = JumboDB()
+        self.cleaner = theCleaner()
         self.outputDir = "/Users/andrewpaley/Dropbox/nu/introToML/voicesCarry/storedModels/v2/"
         # set up the data
         self.bootstrapData()
@@ -50,7 +52,7 @@ class Teacher(object):
         quotes = []
         nonquotes = []
         for d in dataset:
-            d["training_snippet"] = self.cleanUpString(d["snippet"])
+            d["training_snippet"] = self.cleaner.createRepresentation(d["snippet"])
             if d["is_quote"] == 1:
                 quotes.append(d)
             else:
@@ -79,22 +81,10 @@ class Teacher(object):
             output.append((d["training_snippet"], {"cats": {"QUOTE": d["is_quote"]}}))
         return output
 
-    def createRepresentation(self, snippet):
-        # for now, just clean the string
-        # lots more to come
-        return self.cleanUpString(snippet)
-
-    def cleanUpString(self, snippet):
-        # a place to stick any string cleaning stuff
-        # called during data prep
-        snippet = snippet.replace(u'’', u"'")
-        snippet = snippet.replace(u'“', u'\"')
-        snippet = snippet.replace(u'”', '"')
-        snippet = snippet.replace(u'“', u'\"')
-        snippet = snippet.replace(u'”', u'\"')
-        snippet = snippet.replace("\x1b[1;2D", "")
-        snippet = snippet.replace("\x1b[1;", "")
-        return snippet
+    # def createRepresentation(self, snippet):
+    #     # for now, just clean the string
+    #     # lots more to come
+    #     return self.cleaner.cleanUpString(snippet)
 
     def trainQuoteClassifier(self, trainSet):
         # focus the trainer
@@ -115,9 +105,10 @@ class Teacher(object):
         optimizer = self.nlp.begin_training()
         # breakpoint()
         # train!
+        dropout = decaying(0.6, 0.2, 1e-4)
         for batch in batches:
             snippets, cats = zip(*batch)
-            self.nlp.update(snippets, cats, sgd=optimizer, drop=0.3, losses=losses)
+            self.nlp.update(snippets, cats, sgd=optimizer, drop=next(dropout), losses=losses)
         self.losses = losses
         self.textCat = textCat
 
@@ -183,7 +174,7 @@ class Teacher(object):
 
     def classifySnippet(self, snippet):
         # take a snippet and return the classification of quote or not
-        doc = self.nlp(snippet)
+        doc = self.nlp(self.cleaner.createRepresentation(snippet))
         return doc.cats
 
 if __name__ == "__main__":

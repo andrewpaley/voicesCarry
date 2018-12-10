@@ -2,6 +2,7 @@ from jumbodb import JumboDB
 from trunk import Trunk
 from teacher import Teacher
 from grok import Grok
+from cleaner import theCleaner
 import spacy
 from verbsOfAttribution import verbsOA
 import os
@@ -16,6 +17,7 @@ class Shepherd(object):
         self.topicList = [t["topic"] for t in self.jdb.getAll("topics")]
         self.verbsOfAttribution = verbsOA
         self.teacher = Teacher()
+        self.cleaner = theCleaner()
         self.trunk = None
         self.grok = Grok()
 
@@ -220,8 +222,7 @@ class Shepherd(object):
 
     def classifySentence(self, spacyText):
         # a bridge to teacher
-        if not self.teacher: self.teacher = Teacher()
-        return self.teacher.classifySnippet(self.teacher.cleanUpString(spacyText.text))
+        return self.teacher.classifySnippet(spacyText.text)
 
     def verbMatch(self, spacyText):
         keyLemmas = [word.lemma_ for word in spacyText if word.pos_ == "VERB"]
