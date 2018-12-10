@@ -75,7 +75,7 @@ class Shepherd(object):
             return False
         snippet["is_quote"] = 1 if quoteCheck == "y" else 0
         snippet["is_paraphrase"] = 1 if quoteCheck == "p" else 0
-        if quoteCheck == "y" or quotecheck = "p":
+        if quoteCheck == "y" or quotecheck == "p":
             # get the speaker
             speaker_id = self.requestWith("Who is the speaker of the quote (give the id)?")
             if speaker_id == "c" or (speaker_id and self.jdb.getOne("people", speaker_id) == None):
@@ -131,7 +131,7 @@ class Shepherd(object):
                 type = "nonquote"
                 person_id = None
                 topic_id = None
-                if response = "y" or response == "p":
+                if response == "y" or response == "p":
                     type = "quote" if response == "y" else "paraphrase"
                     person_id = self.requestWith("Which person is the speaker (enter id or leave blank for null): ")
                     topic_id = self.requestWith("What's the topic (enter id or leave blank for null): ")
@@ -189,7 +189,7 @@ class Shepherd(object):
                 type = "nonquote"
                 person_id = None
                 topic_id = None
-                if response = "y" or response == "p":
+                if response == "y" or response == "p":
                     type = "quote" if response == "y" else "paraphrase"
                     person_id = self.requestWith("Which person is the speaker (enter id or leave blank for null): ")
                     topic_id = self.requestWith("What's the topic (enter id or leave blank for null): ")
