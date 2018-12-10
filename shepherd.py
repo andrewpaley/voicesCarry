@@ -1,4 +1,5 @@
 from jumbodb import JumboDB
+from teacher import Teacher
 import spacy
 from verbsOfAttribution import verbsOA
 import os
@@ -17,6 +18,7 @@ class Shepherd(object):
         self.flatPeopleList = self.prepPeopleList()
         self.topicList = [t["topic"] for t in self.jdb.getAll("topics")]
         self.verbsOfAttribution = verbsOA
+        self.teacher = Teacher()
 
     def prepPeopleList(self):
         stopList = ["of", "the", "to"]
@@ -36,11 +38,13 @@ class Shepherd(object):
         self.selectMethod(article)
 
     def selectMethod(self, article):
-        # method = input("Do you want to (b)rowse the full article or let Shepherd (g)uess? (b / g): ")
-        # if method == "b":
-        self.requestSnippets(article)
-        # else:
-        #     self.smartSuggest(article)
+        method = input("Do you want to browse the full article, have Shepherd guess or have Teacher suggest? (browse / guess / teacher): ")
+        if method == "teacher":
+            self.smartGuessAndSuggest(article)
+        elif method == "guess":
+            self.guessAndSuggest(article)
+        else:
+            self.requestSnippets(article)
 
     def requestSnippets(self, article):
         # get the quote
@@ -59,7 +63,8 @@ class Shepherd(object):
             "source_id": article["id"],
             "approved": 1,
             "deleted": 0,
-            "is_quote": 0
+            "is_quote": 0,
+            "is_paraphrase": 0
         }
 
         # is this a quote?
@@ -69,7 +74,8 @@ class Shepherd(object):
             self.requestQuotes()
             return False
         snippet["is_quote"] = 1 if quoteCheck == "y" else 0
-        if quoteCheck == "y":
+        snippet["is_paraphrase"] = 1 if quoteCheck == "p" else 0
+        if quoteCheck == "y" or quotecheck = "p":
             # get the speaker
             speaker_id = self.requestWith("Who is the speaker of the quote (give the id)?")
             if speaker_id == "c" or (speaker_id and self.jdb.getOne("people", speaker_id) == None):
@@ -97,7 +103,7 @@ class Shepherd(object):
         for snippet in self.snippetList:
             self.jdb.create("snippets", snippet)
 
-    def smartSuggest(self, article):
+    def guessAndSuggest(self, article):
         if article == None:
             print("No more articles!")
             return False
@@ -119,12 +125,16 @@ class Shepherd(object):
             print(sent)
             print("=====================================\n")
             response = self.requestWith("Does this look like a quote? (y/n -- or leave blank to discard) ")
-            if response == "y" or response == "n": # second one is "no but save"
+            if response == "y" or response == "n" or response == "p": # n is "no but save", p is "paraphrase"
                 # confirm followup questions about topic_id / person_id
                 # store the snippet
-                type = "quote" if response == "y" else "non_quote"
-                person_id = self.requestWith("Which person is the speaker (enter id or leave blank for null): ")
-                topic_id = self.requestWith("What's the topic (enter id or leave blank for null): ")
+                type = "nonquote"
+                person_id = None
+                topic_id = None
+                if response = "y" or response == "p":
+                    type = "quote" if response == "y" else "paraphrase"
+                    person_id = self.requestWith("Which person is the speaker (enter id or leave blank for null): ")
+                    topic_id = self.requestWith("What's the topic (enter id or leave blank for null): ")
                 # self.storeSnippetFromSpacy(sourceSentences[corefSentences.index(sent)], article, person_id, topic_id, type)
                 self.storeSnippetFromSpacy(sent, article, person_id, topic_id, type)
         self.jdb.markArticleShepherded(article)
@@ -138,12 +148,55 @@ class Shepherd(object):
             "source_id": article["id"],
             "approved": 1,
             "deleted": 0,
-            "is_quote": 1 if type == "quote" else 0
+            "is_quote": 1 if type == "quote" else 0,
+            "is_paraphrase": 1 if type == "paraphrase" else 0
         }
         return self.jdb.create("snippets", snippet)
 
     def interestingSnippetCheck(self, spacyText):
         return self.personOfInterestCheck(spacyText) and (self.verbMatch(spacyText) or self.quoteCheck(spacyText))
+
+    def classifySentence(self, spacyText):
+        # a bridge to teacher
+        if not self.teacher: self.teacher = Teacher()
+        return self.teacher.classifySnippet(spacyText.text)
+
+    def smartGuessAndSuggest(self, article):
+        if article == None:
+            print("No more articles!")
+            return False
+        print("=====================================\n")
+        print("NEW ARTICLE!")
+        print("=====================================\n")
+        print(article["article_body"])
+        print("=====================================\n")
+        sa = self.nlp(article["article_body"])
+        sourceSentences = list(sa.sents)
+        article["corefed_body"] = sa._.coref_resolved
+        corefSA = self.nlp(article["corefed_body"])
+        corefSentences = list(corefSA.sents)
+        # interestingSents = [sent for sent in corefSentences if self.interestingSnippetCheck(sent)]
+        interestingSents = [sent for sent in sourceSentences if self.classifySentence(sent)["QUOTE"] > 0.5]
+        for sent in interestingSents:
+            os.system("cls" if os.name == "nt" else "clear")
+            print("=====================================\n")
+            print(sent)
+            print("=====================================\n")
+            response = self.requestWith("Does this look like a quote? (y/n -- or leave blank to discard) ")
+            if response == "y" or response == "n" or response == "p": # n is "no but save", p is "paraphrase"
+                # confirm followup questions about topic_id / person_id
+                # store the snippet
+                type = "nonquote"
+                person_id = None
+                topic_id = None
+                if response = "y" or response == "p":
+                    type = "quote" if response == "y" else "paraphrase"
+                    person_id = self.requestWith("Which person is the speaker (enter id or leave blank for null): ")
+                    topic_id = self.requestWith("What's the topic (enter id or leave blank for null): ")
+                # self.storeSnippetFromSpacy(sourceSentences[corefSentences.index(sent)], article, person_id, topic_id, type)
+                self.storeSnippetFromSpacy(sent, article, person_id, topic_id, type)
+        self.jdb.markArticleShepherded(article)
+        self.smartSuggest(self.jdb.getUnshepherdedArticle())
 
     def verbMatch(self, spacyText):
         keyLemmas = [word.lemma_ for word in spacyText if word.pos_ == "VERB"]
