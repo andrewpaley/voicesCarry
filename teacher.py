@@ -9,10 +9,12 @@ import math
 
 # GOALS:
 # 1) DONE: recognize individual quotes in text (needs training/testing)
-# 2) TODO: collect more snippets
-# 3) TODO: try training categorizes to recognize a) subject and b) speaker?
+# 2) TODO: collect more snippets (300, roughly split 2/1 nonquotes/quotes)
+# 3) TODO: create alternate representations of quotes for learning and classifying -- (a) remove named entities and (b) create parse tree representation
 # 4) TODO: freeze that model and then use it to do a pass pulling quotes and leading/trailing sentences from articles (grok v1)
-# 5) FUTURE TODO (post project submit): store those in a "context_snippets" table in jumbodb and then do a second pass of training to teach the system to recognize good context
+# 5) TODO: deploy to digitalocean and launch webpage that takes a URL and groks the article
+# 5) FUTURE TODO (post project submit): try training categorizes to recognize a) subject and b) speaker
+# 6) FUTURE TODO (post project submit): store those in a "context_snippets" table in jumbodb and then do a second pass of training to teach the system to recognize good context
 
 class Teacher(object):
     def __init__(self):
@@ -76,8 +78,11 @@ class Teacher(object):
         snippet = snippet.replace(u'’', u"'")
         snippet = snippet.replace(u'“', u'\"')
         snippet = snippet.replace(u'”', '"')
+        snippet = snippet.replace(u'“', u'\"')
+        snippet = snippet.replace(u'”', u'\"')
         snippet = snippet.replace("\x1b[1;2D", "")
         snippet = snippet.replace("\x1b[1;", "")
+
         return snippet
 
     def trainQuoteClassifier(self, trainSet):

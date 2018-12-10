@@ -7,6 +7,7 @@ from time import sleep
 from newspaper import Article
 import os
 from jumbodb import JumboDB
+from urllib.parse import urlsplit, urlunsplit
 
 newsAPIKey = os.getenv("newsAPIKey")
 
@@ -110,6 +111,31 @@ class Trunk(object):
         outputStory["source_link"] = story["url"]
         outputStory["published_date"] = story["publishedAt"]
         return outputStory
+
+    def getStoryByURL(self, url):
+        # ad hoc requesting! should return a payload pulled back from jdb after storage of article
+        article = Article(url)
+        article.download()
+        article.parse()
+
+        if "og" in article.meta_data and "site_name" in article.meta_data["og"]:
+            source_name = article.meta_data["og"]["site_name"]
+        elif article.meta_data["host"]:
+            source_name = article.meta_data["host"]
+        else:
+            splitURL = urlsplit(url)
+            source_name = splitURL.netloc
+
+        story = {
+            "article_title": article.title,
+            "article_description": article.meta_description,
+            "article_summary": article.meta_description,
+            "article_body": article.text,
+            "source_name": source_name,
+            "source_link": url,
+            "published_date": article.publish_date.isoformat()
+        }
+        return self.jdb.create("articles", story)
 
     def queryNewsAPI(self, query, from_date, to_date):
         # check the cached_newsapi_queries table to see if you already have results for this one

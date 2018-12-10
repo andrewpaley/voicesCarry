@@ -1,4 +1,5 @@
 from jumbodb import JumboDB
+from trunk import Trunk
 from teacher import Teacher
 import spacy
 from verbsOfAttribution import verbsOA
@@ -19,6 +20,7 @@ class Shepherd(object):
         self.topicList = [t["topic"] for t in self.jdb.getAll("topics")]
         self.verbsOfAttribution = verbsOA
         self.teacher = Teacher()
+        self.trunk = None
 
     def prepPeopleList(self):
         stopList = ["of", "the", "to"]
@@ -26,10 +28,10 @@ class Shepherd(object):
         peopleDeepSplat = [word for strng in peopleSplat for word in strng.split(" ") if word not in stopList]
         return list(set(peopleDeepSplat))
 
-    def presentArticle(self):
+    def presentArticle(self, article=None):
         self.snippetList = []
         print("\n\n=====================================\n\n")
-        article = self.jdb.getUnshepherdedArticle()
+        if not article: article = self.jdb.getUnshepherdedArticle()
         if article == None:
             print("There aren't any articles to present.")
             return False
@@ -40,9 +42,12 @@ class Shepherd(object):
     def selectMethod(self, article):
         method = input("Do you want to browse the full article, have Shepherd guess or have Teacher suggest? (browse / guess / teacher): ")
         if method == "teacher":
-            self.smartGuessAndSuggest(article)
+            self.guessAndSuggest(article, smart=True)
         elif method == "guess":
             self.guessAndSuggest(article)
+        elif method == "aa":
+            url = input("Ah, give me a URL to ingest from: ")
+            self.trunkUp(url)
         else:
             self.requestSnippets(article)
 
@@ -103,7 +108,7 @@ class Shepherd(object):
         for snippet in self.snippetList:
             self.jdb.create("snippets", snippet)
 
-    def guessAndSuggest(self, article):
+    def guessAndSuggest(self, article, smart=False):
         if article == None:
             print("No more articles!")
             return False
@@ -118,7 +123,10 @@ class Shepherd(object):
         corefSA = self.nlp(article["corefed_body"])
         corefSentences = list(corefSA.sents)
         # interestingSents = [sent for sent in corefSentences if self.interestingSnippetCheck(sent)]
-        interestingSents = [sent for sent in sourceSentences if self.interestingSnippetCheck(sent)]
+        if smart == True:
+            interestingSents = [sent for sent in sourceSentences if self.classifySentence(sent)["QUOTE"] > 0.5]
+        else:
+            interestingSents = [sent for sent in sourceSentences if self.interestingSnippetCheck(sent)]
         for sent in interestingSents:
             os.system("cls" if os.name == "nt" else "clear")
             print("=====================================\n")
@@ -138,7 +146,7 @@ class Shepherd(object):
                 # self.storeSnippetFromSpacy(sourceSentences[corefSentences.index(sent)], article, person_id, topic_id, type)
                 self.storeSnippetFromSpacy(sent, article, person_id, topic_id, type)
         self.jdb.markArticleShepherded(article)
-        self.guessAndSuggest(self.jdb.getUnshepherdedArticle())
+        self.guessAndSuggest(self.jdb.getUnshepherdedArticle(), smart)
 
     def storeSnippetFromSpacy(self, sentence, article, person_id=None, topic_id=None, type="quote"):
         snippet = {
@@ -160,43 +168,6 @@ class Shepherd(object):
         # a bridge to teacher
         if not self.teacher: self.teacher = Teacher()
         return self.teacher.classifySnippet(self.teacher.cleanUpString(spacyText.text))
-
-    def smartGuessAndSuggest(self, article):
-        if article == None:
-            print("No more articles!")
-            return False
-        print("=====================================\n")
-        print("NEW ARTICLE!")
-        print("=====================================\n")
-        print(article["article_body"])
-        print("=====================================\n")
-        sa = self.nlp(article["article_body"])
-        sourceSentences = list(sa.sents)
-        article["corefed_body"] = sa._.coref_resolved
-        corefSA = self.nlp(article["corefed_body"])
-        corefSentences = list(corefSA.sents)
-        # interestingSents = [sent for sent in corefSentences if self.interestingSnippetCheck(sent)]
-        interestingSents = [sent for sent in sourceSentences if self.classifySentence(sent)["QUOTE"] > 0.5]
-        for sent in interestingSents:
-            os.system("cls" if os.name == "nt" else "clear")
-            print("=====================================\n")
-            print(sent)
-            print("=====================================\n")
-            response = self.requestWith("Does this look like a quote? (y/n -- or leave blank to discard) ")
-            if response == "y" or response == "n" or response == "p": # n is "no but save", p is "paraphrase"
-                # confirm followup questions about topic_id / person_id
-                # store the snippet
-                type = "nonquote"
-                person_id = None
-                topic_id = None
-                if response == "y" or response == "p":
-                    type = "quote" if response == "y" else "paraphrase"
-                    person_id = self.requestWith("Which person is the speaker (enter id or leave blank for null): ")
-                    topic_id = self.requestWith("What's the topic (enter id or leave blank for null): ")
-                # self.storeSnippetFromSpacy(sourceSentences[corefSentences.index(sent)], article, person_id, topic_id, type)
-                self.storeSnippetFromSpacy(sent, article, person_id, topic_id, type)
-        self.jdb.markArticleShepherded(article)
-        self.smartGuessAndSuggest(self.jdb.getUnshepherdedArticle())
 
     def verbMatch(self, spacyText):
         keyLemmas = [word.lemma_ for word in spacyText if word.pos_ == "VERB"]
@@ -223,6 +194,9 @@ class Shepherd(object):
         elif pi == "pp":
             self.printPeople()
             return self.requestWith(prompt)
+        elif pi == "aa":
+            url = input("Ah, give me a URL to ingest from: ")
+            self.trunkUp(url)
         return pi
 
     def printTopics(self):
@@ -239,9 +213,16 @@ class Shepherd(object):
             print(person["first_name"] + " " + person["last_name"] + ": " + str(person["id"]))
         print("==============")
 
+    # ad hoc consumption functions
+    def trunkUp(self, url):
+        if not self.trunk:
+            self.trunk = Trunk()
+        article = self.trunk.getStoryByURL(url)
+        self.presentArticle(article)
+
 if __name__ == "__main__":
     s = Shepherd()
-    if len(sys.argv) > 1 and sys.argv[1] in ["t","teacher"]:
-        s.teacher()
+    if len(sys.argv) > 2 and sys.argv[1] in ["-a"]:
+        s.trunkUp(sys.argv[2])
     else:
         s.presentArticle()

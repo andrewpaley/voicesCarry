@@ -1,5 +1,4 @@
 import sqlite3
-from newsapi import NewsApiClient
 from collections import OrderedDict
 import json
 from pprint import pprint as pp
@@ -22,7 +21,15 @@ peopleForTraining = [
     {"first_name": "Nancy", "last_name": "Pelosi" , "party": "D"},
     {"first_name": "Paul", "last_name": "Ryan" , "party": "R"},
     {"first_name": "Ocasio Cortez", "last_name": "Alexandria" , "party": "D"},
-    {"first_name": "Kellyanne", "last_name": "Conway" , "party": "R"}
+    {"first_name": "Kellyanne", "last_name": "Conway" , "party": "R"},
+    {"first_name": "Barack", "last_name": "Obama" , "party": "D"},
+    {"first_name": "George", "last_name": "Bush" , "party": "R"},
+    {"first_name": "Rand", "last_name": "Paul" , "party": "R"},
+    {"first_name": "James", "last_name": "Comey" , "party": "R"},
+    {"first_name": "Michael", "last_name": "Cohen" , "party": "R"},
+    {"first_name": "Chris", "last_name": "Christie" , "party": "R"},
+    {"first_name": "Jeff", "last_name": "Flake" , "party": "R"},
+    {"first_name": "Rudy", "last_name": "Giuliani" , "party": "R"},
 ]
 
 class JumboDB(object):
