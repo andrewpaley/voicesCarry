@@ -9,7 +9,7 @@ import math
 
 # GOALS:
 # 1) DONE: recognize individual quotes in text (needs training/testing)
-# 2) TODO: collect more snippets (300, roughly split 2/1 nonquotes/quotes)
+# 2) TODO (IN PROGRESS): collect more snippets (300, roughly split 2/1 nonquotes/quotes)
 # 3) TODO: create alternate representations of quotes for learning and classifying -- (a) remove named entities and (b) create parse tree representation
 # 4) TODO: freeze that model and then use it to do a pass pulling quotes and leading/trailing sentences from articles (grok v1)
 # 5) TODO: deploy to digitalocean and launch webpage that takes a URL and groks the article
@@ -152,3 +152,4 @@ class Teacher(object):
 if __name__ == "__main__":
     t = Teacher()
     t.train()
+    t.test()

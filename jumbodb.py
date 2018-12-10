@@ -30,6 +30,8 @@ peopleForTraining = [
     {"first_name": "Chris", "last_name": "Christie" , "party": "R"},
     {"first_name": "Jeff", "last_name": "Flake" , "party": "R"},
     {"first_name": "Rudy", "last_name": "Giuliani" , "party": "R"},
+    {"first_name": "White House", "last_name": "Spokesperson" , "party": "R"},
+    {"first_name": "Jared", "last_name": "Kushner" , "party": "R"},
 ]
 
 class JumboDB(object):

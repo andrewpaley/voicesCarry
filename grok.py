@@ -3,11 +3,6 @@ from datetime import datetime, timedelta
 from pprint import pprint as pp
 from jumbodb import JumboDB
 import spacy
-# import corenlp
-# import os
-# cnlpServer = os.getenv("cnlpServer")
-# cnlpPort = int(os.getenv("cnlpPort"))
-# cnlpAnnotators = "tokenize ssplit pos lemma ner coref quote"
 
 class Grok(object):
     def __init__(self):

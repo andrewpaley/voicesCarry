@@ -1,6 +1,7 @@
 from jumbodb import JumboDB
 from trunk import Trunk
 from teacher import Teacher
+from grok import Grok
 import spacy
 from verbsOfAttribution import verbsOA
 import os
@@ -21,6 +22,7 @@ class Shepherd(object):
         self.verbsOfAttribution = verbsOA
         self.teacher = Teacher()
         self.trunk = None
+        self.grok = None
 
     def prepPeopleList(self):
         stopList = ["of", "the", "to"]
@@ -40,11 +42,11 @@ class Shepherd(object):
         self.selectMethod(article)
 
     def selectMethod(self, article):
-        method = input("Do you want to browse the full article, have Shepherd guess or have Teacher suggest? (browse / guess / teacher): ")
-        if method == "teacher":
-            self.guessAndSuggest(article, smart=True)
-        elif method == "guess":
+        method = input("Do you want to browse the full article, have Shepherd guess with Teacher's help? (browse / guess): ")
+        if method == "guess":
             self.guessAndSuggest(article)
+        # elif method == "teacher":
+        #     self.guessAndSuggest(article, smart=True)
         elif method == "aa":
             url = input("Ah, give me a URL to ingest from: ")
             self.trunkUp(url)
@@ -108,7 +110,7 @@ class Shepherd(object):
         for snippet in self.snippetList:
             self.jdb.create("snippets", snippet)
 
-    def guessAndSuggest(self, article, smart=False):
+    def guessAndSuggest_DEPRECATED(self, article, smart=False):
         if article == None:
             print("No more articles!")
             return False
@@ -127,6 +129,17 @@ class Shepherd(object):
             interestingSents = [sent for sent in sourceSentences if self.classifySentence(sent)["QUOTE"] > 0.5]
         else:
             interestingSents = [sent for sent in sourceSentences if self.interestingSnippetCheck(sent)]
+        interestingCoupledSentences = []
+        for i, sent in enumerate(sourceSentences):
+            if len(sourceSentences)-1 == i: continue
+            coupledSent = sent.text + " " + sourceSentences[i+1].text
+            coupledSent = self.nlp(coupledSent)
+            if smart == True:
+                if self.classifySentence(coupledSent)["QUOTE"] > 0.5: interestingCoupledSentences.append(coupledSent)
+            else:
+                if self.interestingSnippetCheck(coupledSent)["QUOTE"] > 0.5: interestingCoupledSentences.append(coupledSent)
+        interestingSents.extend(interestingCoupledSentences)
+        print(interestingSents)
         for sent in interestingSents:
             os.system("cls" if os.name == "nt" else "clear")
             print("=====================================\n")
@@ -143,10 +156,58 @@ class Shepherd(object):
                     type = "quote" if response == "y" else "paraphrase"
                     person_id = self.requestWith("Which person is the speaker (enter id or leave blank for null): ")
                     topic_id = self.requestWith("What's the topic (enter id or leave blank for null): ")
-                # self.storeSnippetFromSpacy(sourceSentences[corefSentences.index(sent)], article, person_id, topic_id, type)
                 self.storeSnippetFromSpacy(sent, article, person_id, topic_id, type)
         self.jdb.markArticleShepherded(article)
         self.guessAndSuggest(self.jdb.getUnshepherdedArticle(), smart)
+
+    def guessAndSuggest(self, article, smart=False):
+        # now does both smart and dumb guessing for maximum recall during training
+        if article == None:
+            print("No more articles!")
+            return False
+        print("=====================================\n")
+        print("NEW ARTICLE!")
+        print("=====================================\n")
+        print(article["article_body"])
+        print("=====================================\n")
+        sa = self.nlp(article["article_body"])
+        sourceSentences = list(sa.sents)
+        # bundle them up so we aren't weirdly splitting quotes
+        sourceSentences = self.chunkSentencesByQuote(sourceSentences)
+        # smart way
+        interestingSents = [sent for sent in sourceSentences if self.classifySentence(sent)["QUOTE"] > 0.5]
+        # add dumb guesses
+        interestingSents.extend([sent for sent in sourceSentences if self.interestingSnippetCheck(sent)])
+        # couple the sentences up for any better overall statements
+        # interestingCoupledSentences = []
+        # for i, sent in enumerate(sourceSentences):
+        #     if len(sourceSentences)-1 == i: continue
+        #     coupledSent = sent.text + " " + sourceSentences[i+1].text
+        #     coupledSent = self.nlp(coupledSent)
+        #     if self.classifySentence(coupledSent)["QUOTE"] > 0.5: interestingCoupledSentences.append(coupledSent)
+        #     if self.interestingSnippetCheck(coupledSent): interestingCoupledSentences.append(coupledSent)
+        # interestingSents.extend(interestingCoupledSentences)
+        # now run them for review
+        for sent in interestingSents:
+            os.system("cls" if os.name == "nt" else "clear")
+            print("=====================================\n")
+            print(sent)
+            print("=====================================\n")
+            response = self.requestWith("Does this look like a quote? (y/n -- or leave blank to discard) ")
+            if response == "y" or response == "n" or response == "p": # n is "no but save", p is "paraphrase"
+                # confirm followup questions about topic_id / person_id
+                # store the snippet
+                type = "nonquote"
+                person_id = None
+                topic_id = None
+                if response == "y" or response == "p":
+                    type = "quote" if response == "y" else "paraphrase"
+                    person_id = self.requestWith("Which person is the speaker (enter id or leave blank for null): ")
+                    topic_id = self.requestWith("What's the topic (enter id or leave blank for null): ")
+                self.storeSnippetFromSpacy(sent, article, person_id, topic_id, type)
+        self.jdb.markArticleShepherded(article)
+        self.guessAndSuggest(self.jdb.getUnshepherdedArticle(), smart)
+
 
     def storeSnippetFromSpacy(self, sentence, article, person_id=None, topic_id=None, type="quote"):
         snippet = {
@@ -182,6 +243,34 @@ class Shepherd(object):
     def personOfInterestCheck(self, spacyText):
         matches = [word.text for word in spacyText if word.text in self.flatPeopleList]
         return len(matches) > 0
+
+    def chunkSentencesByQuote(self, sentences):
+        # TODO: move this to grok later
+        outputSentences = []
+        withinQuote = False
+        compoundQuote = ""
+        for sentence in sentences:
+            quoteTokens = [token for token in sentence if token.is_quote and token.text != "'"]
+            quoteTokenCount = len(quoteTokens)
+            if quoteTokenCount % 2 != 0 and withinQuote == False:
+                # double check
+                quoteCount = self.teacher.cleanUpString(sentence.text).count('"')
+                if quoteCount % 2 == 0:
+                    outputSentences.append(sentence)
+                else:
+                    compoundQuote += sentence.text
+                    withinQuote = True
+            elif quoteTokenCount == 0 and withinQuote == True:
+                compoundQuote += " " + sentence.text
+            elif quoteTokenCount % 2 != 0 and withinQuote == True:
+                compoundQuote += " " + sentence.text
+                newSent = self.nlp(compoundQuote)
+                outputSentences.append(newSent)
+                compoundQuote = ""
+                withinQuote = False
+            else:
+                outputSentences.append(sentence)
+        return outputSentences
 
     def requestWith(self, prompt):
         print(prompt)
