@@ -138,7 +138,7 @@ class Shepherd(object):
                 # self.storeSnippetFromSpacy(sourceSentences[corefSentences.index(sent)], article, person_id, topic_id, type)
                 self.storeSnippetFromSpacy(sent, article, person_id, topic_id, type)
         self.jdb.markArticleShepherded(article)
-        self.smartSuggest(self.jdb.getUnshepherdedArticle())
+        self.guessAndSuggest(self.jdb.getUnshepherdedArticle())
 
     def storeSnippetFromSpacy(self, sentence, article, person_id=None, topic_id=None, type="quote"):
         snippet = {
@@ -196,7 +196,7 @@ class Shepherd(object):
                 # self.storeSnippetFromSpacy(sourceSentences[corefSentences.index(sent)], article, person_id, topic_id, type)
                 self.storeSnippetFromSpacy(sent, article, person_id, topic_id, type)
         self.jdb.markArticleShepherded(article)
-        self.smartSuggest(self.jdb.getUnshepherdedArticle())
+        self.smartGuessAndSuggest(self.jdb.getUnshepherdedArticle())
 
     def verbMatch(self, spacyText):
         keyLemmas = [word.lemma_ for word in spacyText if word.pos_ == "VERB"]
@@ -214,13 +214,13 @@ class Shepherd(object):
 
     def requestWith(self, prompt):
         print(prompt)
-        pi = input("(for help or other: type none if none left, t for topics list, and p for people list): ")
+        pi = input("(for help or other: type none if none left, t for topics list, and pp for people list): ")
         if pi == "none":
             return None
         elif pi == "t":
             self.printTopics()
             return self.requestWith(prompt)
-        elif pi == "p":
+        elif pi == "pp":
             self.printPeople()
             return self.requestWith(prompt)
         return pi
