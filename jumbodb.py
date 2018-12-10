@@ -104,7 +104,8 @@ class JumboDB(object):
             "source_id": "",
             "approved": 0,
             "deleted": 0,
-            "is_quote": 0
+            "is_quote": 0,
+            "is_paraphrase": 0
         })
         self.cachedNewsAPIQueriesSchema = OrderedDict({
             "query": "",

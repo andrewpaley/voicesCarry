@@ -3,6 +3,8 @@ from spacy.util import minibatch, compounding
 from jumbodb import JumboDB
 from random import shuffle
 import math
+import sys
+from pathlib import Path
 
 # implementation note: this can be called from shepherd if we're trying to ingest new articles
 # or worked with directly for testing
@@ -18,19 +20,24 @@ import math
 
 class Teacher(object):
     def __init__(self):
-        self.nlp = spacy.blank('en')
+        self.nlp = None
+        self.losses = None
+        self.textCat = None
         self.jdb = JumboDB()
-        self.train()
+        self.outputDir = "/Users/andrewpaley/Dropbox/nu/introToML/voicesCarry/storedModels/v2/"
+        # set up the data
+        self.bootstrapData()
 
     def train(self, dataset = None):
-        if not dataset:
-            dataset = self.jdb.getAll("snippets")
-        trainSet, testSet = self.prepData(dataset, True)
+        self.nlp = spacy.blank('en')
+        self.trainQuoteClassifier(self.trainSet)
 
+    def bootstrapData(self):
+        dataset = self.jdb.getAll("snippets")
+        trainSet, testSet = self.prepData(dataset, True)
         # set apart in case we want to do different types of analysis later...let's prep for spacy for now
         self.trainSet = self.makeSpacyReadySchema(trainSet)
         self.testSet = self.makeSpacyReadySchema(testSet)
-        self.trainQuoteClassifier(self.trainSet)
 
     def test(self):
         self.testQuoteClassifier()
@@ -43,7 +50,7 @@ class Teacher(object):
         quotes = []
         nonquotes = []
         for d in dataset:
-            d["snippet"] = self.cleanUpString(d["snippet"])
+            d["training_snippet"] = self.cleanUpString(d["snippet"])
             if d["is_quote"] == 1:
                 quotes.append(d)
             else:
@@ -69,8 +76,13 @@ class Teacher(object):
         # output list of tuples like (u"snippet text", {"cats": {"QUOTE": 0}}) where quote is 0 or 1
         output = []
         for d in dataset:
-            output.append((d["snippet"], {"cats": {"QUOTE": d["is_quote"]}}))
+            output.append((d["training_snippet"], {"cats": {"QUOTE": d["is_quote"]}}))
         return output
+
+    def createRepresentation(self, snippet):
+        # for now, just clean the string
+        # lots more to come
+        return self.cleanUpString(snippet)
 
     def cleanUpString(self, snippet):
         # a place to stick any string cleaning stuff
@@ -82,7 +94,6 @@ class Teacher(object):
         snippet = snippet.replace(u'”', u'\"')
         snippet = snippet.replace("\x1b[1;2D", "")
         snippet = snippet.replace("\x1b[1;", "")
-
         return snippet
 
     def trainQuoteClassifier(self, trainSet):
@@ -100,7 +111,9 @@ class Teacher(object):
         textCat.add_label("QUOTE")
         losses = {}
         batches = minibatch(trainSet, size=compounding(4., 32., 1.001))
+        self.nlp.vocab.vectors.name = "quoteCategorizer"
         optimizer = self.nlp.begin_training()
+        # breakpoint()
         # train!
         for batch in batches:
             snippets, cats = zip(*batch)
@@ -112,7 +125,10 @@ class Teacher(object):
         # thanks to spacy's on-site tutorial for chunks of this function
         if not testSet: testSet = self.testSet
         snippets, cats = zip(*testSet)
-        print('{:^5}\t{:^5}\t{:^5}\t{:^5}'.format("Loss", "Precision", "Recall", 'F SCORE'))
+        if not self.losses:
+            print('{:^5}\t{:^5}\t{:^5}'.format("Pre.", "Rec.", 'F SCORE'))
+        else:
+            print('{:^5}\t{:^5}\t{:^5}\t{:^5}'.format("Loss", "Pre.", "Rec.", 'F SCORE'))
         snippets = (self.nlp.tokenizer(snippet) for snippet in snippets)
         tp = 0.0   # True positives
         fp = 1e-8  # False positives
@@ -134,10 +150,31 @@ class Teacher(object):
         precision = tp / (tp + fp)
         recall = tp / (tp + fn)
         f_score = 2 * (precision * recall) / (precision + recall)
-        print('{0:.3f}\t{1:.3f}\t{2:.3f}\t{3:.3f}'.format(self.losses["textcat"], precision, recall, f_score))
+        if not self.losses:
+            print('{0:.3f}\t{1:.3f}\t{2:.3f}'.format(precision, recall, f_score))
+        else:
+            print('{0:.3f}\t{1:.3f}\t{2:.3f}\t{3:.3f}'.format(self.losses["textcat"], precision, recall, f_score))
+
+    def saveQuoteClassifier(self):
+        if self.outputDir is not None:
+            outputDir = Path(self.outputDir)
+        if not outputDir.exists():
+            outputDir.mkdir()
+        self.nlp.to_disk(outputDir)
+        print("Saved model to", outputDir)
+
+    def loadSavedQuoteClassifier(self):
+        if self.outputDir is not None:
+            outputDir = Path(self.outputDir)
+        print("Loading from", outputDir)
+        self.nlp = spacy.load(outputDir)
+        self.textCat = self.nlp.get_pipe("textcat")
 
     def classifySomeSnippets(self, snippets=None, limit=10):
         # a wrapper to print a bunch of possible classification outcomes for review
+        print("========================================")
+        print("CHECK OUT SOME SNIPPETS:")
+        print("========================================")
         if not snippets: snippets = self.testSet
         snippetsSubset = snippets[:limit]
         for snippet in snippetsSubset:
@@ -151,5 +188,16 @@ class Teacher(object):
 
 if __name__ == "__main__":
     t = Teacher()
-    t.train()
-    t.test()
+    if len(sys.argv) > 1 and sys.argv[1] in ["-load"]:
+        if len(sys.argv) > 2:
+            t.outputDir = (sys.argv[2])
+        t.loadSavedQuoteClassifier()
+        t.test()
+    elif len(sys.argv) > 1 and sys.argv[1] in ["-save"]:
+        t.train()
+        t.test()
+        t.saveQuoteClassifier()
+    else:
+        t.train()
+        t.test()
+        breakpoint()

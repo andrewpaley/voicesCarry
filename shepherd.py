@@ -7,11 +7,6 @@ from verbsOfAttribution import verbsOA
 import os
 import sys
 
-# TODOS:
-# Expand list of people (Deval Patrick, Beto O'Rourke, ...)
-# Expand list of topics (election 2018, ...)
-
-
 class Shepherd(object):
     def __init__(self):
         self.jdb = JumboDB()
@@ -22,7 +17,7 @@ class Shepherd(object):
         self.verbsOfAttribution = verbsOA
         self.teacher = Teacher()
         self.trunk = None
-        self.grok = None
+        self.grok = Grok()
 
     def prepPeopleList(self):
         stopList = ["of", "the", "to"]
@@ -82,7 +77,7 @@ class Shepherd(object):
             return False
         snippet["is_quote"] = 1 if quoteCheck == "y" else 0
         snippet["is_paraphrase"] = 1 if quoteCheck == "p" else 0
-        if quoteCheck == "y" or quotecheck == "p":
+        if quoteCheck == "y" or quoteCheck == "p":
             # get the speaker
             speaker_id = self.requestWith("Who is the speaker of the quote (give the id)?")
             if speaker_id == "c" or (speaker_id and self.jdb.getOne("people", speaker_id) == None):
@@ -170,23 +165,21 @@ class Shepherd(object):
         print("=====================================\n")
         print(article["article_body"])
         print("=====================================\n")
-        sa = self.nlp(article["article_body"])
-        sourceSentences = list(sa.sents)
-        # bundle them up so we aren't weirdly splitting quotes
-        sourceSentences = self.chunkSentencesByQuote(sourceSentences)
+        # pitch this off to grok to generate candidates...this ensures it all happens in one place
+        sourceSentences = self.grok.generateStoryChunkCandidates(article)
         # smart way
         interestingSents = [sent for sent in sourceSentences if self.classifySentence(sent)["QUOTE"] > 0.5]
         # add dumb guesses
         interestingSents.extend([sent for sent in sourceSentences if self.interestingSnippetCheck(sent)])
         # couple the sentences up for any better overall statements
-        # interestingCoupledSentences = []
-        # for i, sent in enumerate(sourceSentences):
-        #     if len(sourceSentences)-1 == i: continue
-        #     coupledSent = sent.text + " " + sourceSentences[i+1].text
-        #     coupledSent = self.nlp(coupledSent)
-        #     if self.classifySentence(coupledSent)["QUOTE"] > 0.5: interestingCoupledSentences.append(coupledSent)
-        #     if self.interestingSnippetCheck(coupledSent): interestingCoupledSentences.append(coupledSent)
-        # interestingSents.extend(interestingCoupledSentences)
+        interestingCoupledSentences = []
+        for i, sent in enumerate(sourceSentences):
+            if len(sourceSentences)-1 == i: continue
+            coupledSent = sent.text + " " + sourceSentences[i+1].text
+            coupledSent = self.nlp(coupledSent)
+            if self.classifySentence(coupledSent)["QUOTE"] > 0.5: interestingCoupledSentences.append(coupledSent)
+            if self.interestingSnippetCheck(coupledSent): interestingCoupledSentences.append(coupledSent)
+        interestingSents.extend(interestingCoupledSentences)
         # now run them for review
         for sent in interestingSents:
             os.system("cls" if os.name == "nt" else "clear")
@@ -243,34 +236,6 @@ class Shepherd(object):
     def personOfInterestCheck(self, spacyText):
         matches = [word.text for word in spacyText if word.text in self.flatPeopleList]
         return len(matches) > 0
-
-    def chunkSentencesByQuote(self, sentences):
-        # TODO: move this to grok later
-        outputSentences = []
-        withinQuote = False
-        compoundQuote = ""
-        for sentence in sentences:
-            quoteTokens = [token for token in sentence if token.is_quote and token.text != "'"]
-            quoteTokenCount = len(quoteTokens)
-            if quoteTokenCount % 2 != 0 and withinQuote == False:
-                # double check
-                quoteCount = self.teacher.cleanUpString(sentence.text).count('"')
-                if quoteCount % 2 == 0:
-                    outputSentences.append(sentence)
-                else:
-                    compoundQuote += sentence.text
-                    withinQuote = True
-            elif quoteTokenCount == 0 and withinQuote == True:
-                compoundQuote += " " + sentence.text
-            elif quoteTokenCount % 2 != 0 and withinQuote == True:
-                compoundQuote += " " + sentence.text
-                newSent = self.nlp(compoundQuote)
-                outputSentences.append(newSent)
-                compoundQuote = ""
-                withinQuote = False
-            else:
-                outputSentences.append(sentence)
-        return outputSentences
 
     def requestWith(self, prompt):
         print(prompt)

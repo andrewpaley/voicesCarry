@@ -8,6 +8,7 @@ from newspaper import Article
 import os
 from jumbodb import JumboDB
 from urllib.parse import urlsplit, urlunsplit
+import datetime
 
 newsAPIKey = os.getenv("newsAPIKey")
 
@@ -126,6 +127,8 @@ class Trunk(object):
             splitURL = urlsplit(url)
             source_name = splitURL.netloc
 
+        publish_date = article.publish_date.isoformat() if article.publish_date else datetime.date.today().isoformat()
+
         story = {
             "article_title": article.title,
             "article_description": article.meta_description,
@@ -133,7 +136,7 @@ class Trunk(object):
             "article_body": article.text,
             "source_name": source_name,
             "source_link": url,
-            "published_date": article.publish_date.isoformat()
+            "published_date": publish_date
         }
         return self.jdb.create("articles", story)
 
