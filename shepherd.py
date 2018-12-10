@@ -159,7 +159,7 @@ class Shepherd(object):
     def classifySentence(self, spacyText):
         # a bridge to teacher
         if not self.teacher: self.teacher = Teacher()
-        return self.teacher.classifySnippet(spacyText.text)
+        return self.teacher.classifySnippet(self.teacher.cleanUpString(spacyText.text))
 
     def smartGuessAndSuggest(self, article):
         if article == None:
