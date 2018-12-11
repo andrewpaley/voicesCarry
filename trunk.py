@@ -115,9 +115,12 @@ class Trunk(object):
 
     def getStoryByURL(self, url):
         # ad hoc requesting! should return a payload pulled back from jdb after storage of article
-        article = Article(url)
-        article.download()
-        article.parse()
+        try:
+            article = Article(url)
+            article.download()
+            article.parse()
+        except:
+            return None
 
         if "og" in article.meta_data and "site_name" in article.meta_data["og"]:
             source_name = article.meta_data["og"]["site_name"]

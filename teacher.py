@@ -18,6 +18,8 @@ from pathlib import Path
 # 5) TODO: deploy to digitalocean and launch webpage that takes a URL and groks the article
 # 5) FUTURE TODO (post project submit): try training categorizes to recognize a) subject and b) speaker
 # 6) FUTURE TODO (post project submit): store those in a "context_snippets" table in jumbodb and then do a second pass of training to teach the system to recognize good context
+# 7) FUTURE TODO: use the weird quotes as sign of start and end -- removing them lost you some information
+
 
 class Teacher(object):
     def __init__(self):
@@ -26,9 +28,18 @@ class Teacher(object):
         self.textCat = None
         self.jdb = JumboDB()
         self.cleaner = theCleaner()
-        self.outputDir = "/Users/andrewpaley/Dropbox/nu/introToML/voicesCarry/storedModels/v2/"
+        self.outputDir = "/Users/andrewpaley/Dropbox/nu/introToML/voicesCarry/storedModels/v3/"
         # set up the data
         self.bootstrapData()
+
+    def tenLoop(self):
+        # train and test ten times in a row, recording accuracy scores for each
+        results = [] # will be list of ten tuples: (precision, recall, f_score)
+        for i in range(0,10):
+            self.train()
+            results.append(self.test())
+            self.bootstrapData()
+        return results
 
     def train(self, dataset = None):
         self.nlp = spacy.blank('en')
@@ -42,8 +53,9 @@ class Teacher(object):
         self.testSet = self.makeSpacyReadySchema(testSet)
 
     def test(self):
-        self.testQuoteClassifier()
+        results = self.testQuoteClassifier()
         self.classifySomeSnippets()
+        return results
 
     def prepData(self, dataset, testMode=True): # if testMode is false, all data is training data
         cutoff = 0.75 # the line in the full set between train and test sets
@@ -105,11 +117,13 @@ class Teacher(object):
         optimizer = self.nlp.begin_training()
         # breakpoint()
         # train!
-        dropout = decaying(0.6, 0.2, 1e-4)
+        dropout = decaying(0.3, 0.2, 1e-4)
         for batch in batches:
             snippets, cats = zip(*batch)
             self.nlp.update(snippets, cats, sgd=optimizer, drop=next(dropout), losses=losses)
-        self.losses = losses
+            print("loss on this round:")
+            print(losses)
+            losses = {}
         self.textCat = textCat
 
     def testQuoteClassifier(self, testSet=None):
@@ -145,6 +159,7 @@ class Teacher(object):
             print('{0:.3f}\t{1:.3f}\t{2:.3f}'.format(precision, recall, f_score))
         else:
             print('{0:.3f}\t{1:.3f}\t{2:.3f}\t{3:.3f}'.format(self.losses["textcat"], precision, recall, f_score))
+        return (precision, recall, f_score)
 
     def saveQuoteClassifier(self):
         if self.outputDir is not None:
@@ -169,7 +184,8 @@ class Teacher(object):
         if not snippets: snippets = self.testSet
         snippetsSubset = snippets[:limit]
         for snippet in snippetsSubset:
-            cats = self.classifySnippet(snippet[0])
+            text = snippet[0]
+            cats = self.classifySnippet(text)
             print(snippet[0], cats)
 
     def classifySnippet(self, snippet):
@@ -188,6 +204,9 @@ if __name__ == "__main__":
         t.train()
         t.test()
         t.saveQuoteClassifier()
+    elif len(sys.argv) > 1 and sys.argv[1] in ["-tentest"]:
+        results = t.tenLoop()
+        breakpoint()
     else:
         t.train()
         t.test()

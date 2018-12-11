@@ -1,8 +1,8 @@
 import flask
-from jumbo import jumbo
+from service import api
 
 app = flask.Flask(__name__)
-app.register_blueprint(jumbo)
+app.register_blueprint(api)
 
 app.config["DEBUG"] = True
 

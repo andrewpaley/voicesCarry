@@ -11,7 +11,7 @@ import sys
 class Shepherd(object):
     def __init__(self):
         self.jdb = JumboDB()
-        self.nlp = spacy.load("en_coref_md")
+        self.nlp = spacy.load("en")
         self.peopleList = [(p["first_name"], p["last_name"], p["role"], p["state"], p["ranking_role"]) for p in self.jdb.getAll("people")]
         self.flatPeopleList = self.prepPeopleList()
         self.topicList = [t["topic"] for t in self.jdb.getAll("topics")]

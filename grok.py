@@ -11,7 +11,7 @@ import sys
 class Grok(object):
     def __init__(self, url=None):
         self.latestURL = url
-        self.nlp = spacy.load("en_coref_md")
+        self.nlp = spacy.load("en")
         self.trunk = Trunk()
         self.cleaner = theCleaner()
         # get and set up teacher
@@ -19,7 +19,7 @@ class Grok(object):
         self.teacher.loadSavedQuoteClassifier()
         self.jdb = JumboDB()
         # let's do this
-        self.getStory()
+        # self.getStory()
 
     def getStory(self, repeat=False):
         url = self.latestURL
@@ -35,8 +35,17 @@ class Grok(object):
         else:
             self.requestStory(True)
 
+    def getSnippet(self):
+        inputt = input("Give a sentence to classify: ")
+        result = g.teacher.classifySnippet(inputt)
+        print(result)
+        self.getSnippet()
+
     def grokStory(self, url):
+        if url != self.latestURL: self.latestURL = url
         self.latestArticle = self.trunk.getStoryByURL(url)
+        if not self.latestArticle: return []
+
         self.latestStoryChunks = self.generateStoryChunkCandidates(self.latestArticle)
         quoteGuesses = []
         for snippet in self.latestStoryChunks:
@@ -45,6 +54,7 @@ class Grok(object):
             if prediction["QUOTE"] > 0.5:
                 # return it with the clean text version (?)
                 quoteGuesses.append((prediction["QUOTE"], snippet))
+        self.latestGuesses = quoteGuesses
         return quoteGuesses
 
     def generateStoryChunkCandidates(self, article):
@@ -97,7 +107,7 @@ class Grok(object):
         print(guess[1])
         print(guess[0])
         print("==========")
-        confirmation = input("Is this a quote? (y/n): ")
+        confirmation = input("Is this a quote? (y/n or d for 'discard'): ")
         if not confirmation:
             self.confirmQuote(guess)
             return False
@@ -112,27 +122,33 @@ class Grok(object):
         else:
             return True
 
-    def storeSnippet(self, sentence, article, person_id=None, topic_id=None, type="quote"):
+    def storeSnippet(self, sentence, article, person_id=None, topic_id=None, type="quote", approved=1):
+        if not isinstance(sentence, str): sentence = sentence.text
         snippet = {
-            "snippet": sentence.text,
+            "snippet": sentence,
             "person_id": person_id,
             "topic_id": topic_id,
             "source_id": article["id"],
-            "approved": 1,
+            "approved": approved,
             "deleted": 0,
             "is_quote": 1 if type == "quote" else 0,
             "is_paraphrase": 1 if type == "paraphrase" else 0
         }
         return self.jdb.create("snippets", snippet)
 
-    def toggleGuess(self, storedGuess, is_quote=0):
-        self.jdb.update("snippets", storedGuess["id"], {"is_quote": is_quote})
-
-    def toggleToParaphrase(self, storedGuess, is_paraphrase=1):
-        self.jdb.update("snippets", storedGuess["id"], {"is_quote": 0, "is_paraphrase": 1})
+    # def toggleGuess(self, storedGuess, is_quote=0):
+    #     self.jdb.update("snippets", storedGuess["id"], {"is_quote": is_quote})
+    #
+    # def toggleToParaphrase(self, storedGuess, is_paraphrase=1):
+    #     self.jdb.update("snippets", storedGuess["id"], {"is_quote": 0, "is_paraphrase": 1})
 
 if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[1] in ["-a"]:
         g = Grok(sys.argv[2])
+        g.getStory()
+    elif len(sys.argv) > 1 and sys.argv[1] in ["-t"]:
+        g = Grok()
+        g.getSnippet()
     else:
         g = Grok()
+        g.getStory()
