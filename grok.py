@@ -18,8 +18,8 @@ class Grok(object):
         self.teacher = Teacher()
         self.teacher.loadSavedQuoteClassifier()
         self.jdb = JumboDB()
-        # let's do this
-        # self.getStory()
+        # now a flag that can be toggled to do NONQUOTES for data collection
+        self.collectQuotes = True
 
     def getStory(self, repeat=False):
         url = self.latestURL
@@ -30,7 +30,6 @@ class Grok(object):
         if url:
             self.latestURL = url
             self.latestGuesses = self.grokStory(url)
-            # self.storedGuesses = self.storeGuesses()
             self.reviewGuesses()
         else:
             self.requestStory(True)
@@ -51,8 +50,10 @@ class Grok(object):
         for snippet in self.latestStoryChunks:
             # representation = self.cleaner.createRepresentation(snippet.text)
             prediction = self.teacher.classifySnippet(snippet.text)
-            if prediction["QUOTE"] > 0.5:
+            if prediction["QUOTE"] > 0.5 and self.collectQuotes == True:
                 # return it with the clean text version (?)
+                quoteGuesses.append((prediction["QUOTE"], snippet))
+            elif prediction["QUOTE"] < 0.5 and self.collectQuotes == False:
                 quoteGuesses.append((prediction["QUOTE"], snippet))
         self.latestGuesses = quoteGuesses
         return quoteGuesses
@@ -104,10 +105,11 @@ class Grok(object):
 
     def confirmQuote(self, guess): # part two of command-line-only version
         print("==========")
+        print("QUOTE FOUND:")
         print(guess[1])
-        print(guess[0])
+        print("Is-quote certainty: " + str(guess[0]))
         print("==========")
-        confirmation = input("Is this a quote? (y/n or d for 'discard'): ")
+        confirmation = input("Is this actually a quote? (y/n) (or d to 'discard'): ")
         if not confirmation:
             self.confirmQuote(guess)
             return False
@@ -136,17 +138,14 @@ class Grok(object):
         }
         return self.jdb.create("snippets", snippet)
 
-    # def toggleGuess(self, storedGuess, is_quote=0):
-    #     self.jdb.update("snippets", storedGuess["id"], {"is_quote": is_quote})
-    #
-    # def toggleToParaphrase(self, storedGuess, is_paraphrase=1):
-    #     self.jdb.update("snippets", storedGuess["id"], {"is_quote": 0, "is_paraphrase": 1})
 
 if __name__ == "__main__":
-    if len(sys.argv) > 2 and sys.argv[1] in ["-a"]:
-        g = Grok(sys.argv[2])
+    if "-a" in sys.argv:
+        aindex = sys.argv.index("-a")
+        g = Grok(sys.argv[aindex+1])
+        if "-nonquotes" in sys.argv: g.collectQuotes = False
         g.getStory()
-    elif len(sys.argv) > 1 and sys.argv[1] in ["-t"]:
+    elif "-t" in sys.argv:
         g = Grok()
         g.getSnippet()
     else:

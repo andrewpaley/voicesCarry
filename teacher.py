@@ -6,6 +6,7 @@ from cleaner import theCleaner
 import math
 import sys
 from pathlib import Path
+from pprint import pprint as pp
 
 # implementation note: this can be called from shepherd if we're trying to ingest new articles
 # or worked with directly for testing
@@ -28,11 +29,16 @@ class Teacher(object):
         self.textCat = None
         self.jdb = JumboDB()
         self.cleaner = theCleaner()
-        self.outputDir = "/Users/andrewpaley/Dropbox/nu/introToML/voicesCarry/storedModels/v3/"
+        self.outputDir = "/Users/andrewpaley/Dropbox/nu/introToML/voicesCarry/storedModels/v4/"
+        # set the dropout and minibatch methods
+        self.batchSize = 1
+        self.dropout = 0.3
         # set up the data
         self.bootstrapData()
 
-    def tenLoop(self):
+    def tenLoop(self, batchSize=1, dropout=0.3):
+        self.batchSize = batchSize
+        self.dropout = dropout
         # train and test ten times in a row, recording accuracy scores for each
         results = [] # will be list of ten tuples: (precision, recall, f_score)
         for i in range(0,10):
@@ -112,15 +118,21 @@ class Teacher(object):
         # set up for training
         textCat.add_label("QUOTE")
         losses = {}
-        batches = minibatch(trainSet, size=compounding(4., 32., 1.001))
+        if self.batchSize == "compounding":
+            batches = minibatch(trainSet, size=compounding(4., 32., 1.001))
+        else:
+            batches = minibatch(trainSet, size=self.batchSize)
         self.nlp.vocab.vectors.name = "quoteCategorizer"
         optimizer = self.nlp.begin_training()
-        # breakpoint()
         # train!
-        dropout = decaying(0.3, 0.2, 1e-4)
+        if self.dropout == "decaying":
+            dropoutSet = decaying(0.3, 0.2, 1e-4)
+        else:
+            dropout = self.dropout
         for batch in batches:
             snippets, cats = zip(*batch)
-            self.nlp.update(snippets, cats, sgd=optimizer, drop=next(dropout), losses=losses)
+            if self.dropout == "decaying": dropout = next(dropoutSet)
+            self.nlp.update(snippets, cats, sgd=optimizer, drop=dropout, losses=losses)
             print("loss on this round:")
             print(losses)
             losses = {}
@@ -159,7 +171,7 @@ class Teacher(object):
             print('{0:.3f}\t{1:.3f}\t{2:.3f}'.format(precision, recall, f_score))
         else:
             print('{0:.3f}\t{1:.3f}\t{2:.3f}\t{3:.3f}'.format(self.losses["textcat"], precision, recall, f_score))
-        return (precision, recall, f_score)
+        return [precision, recall, f_score]
 
     def saveQuoteClassifier(self):
         if self.outputDir is not None:
@@ -204,8 +216,17 @@ if __name__ == "__main__":
         t.train()
         t.test()
         t.saveQuoteClassifier()
-    elif len(sys.argv) > 1 and sys.argv[1] in ["-tentest"]:
-        results = t.tenLoop()
+    elif len(sys.argv) > 1 and sys.argv[1] in ["-fulltest"]:
+        pairs = [("compounding", "decaying"), ("compounding", 0.3), ("compounding", 0.5), (5, 0.3), (5, 0.3), (15, 0.3), (0.3, 1), (0.2, 1), (0.1, 1)]
+        fullResults = []
+        for pair in pairs:
+            results = t.tenLoop(batchSize=pair[0], dropout=pair[1])
+            fullResults.append({
+                "dropout": pair[1],
+                "batchSize": pair[0],
+                "results": results
+            })
+        pp(fullResults)
         breakpoint()
     else:
         t.train()
