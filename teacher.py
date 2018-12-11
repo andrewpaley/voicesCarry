@@ -19,7 +19,7 @@ class Teacher(object):
         self.jdb = JumboDB()
         self.cleaner = theCleaner()
         self.outputDir = "/Users/andrewpaley/Dropbox/nu/introToML/voicesCarry/storedModels/v4/"
-        # set the dropout and minibatch methods
+        # set the dropout and minibatch
         self.batchSize = 1
         self.dropout = 0.3
         # set up the data
