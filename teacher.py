@@ -25,20 +25,25 @@ class Teacher(object):
         # set up the data
         self.bootstrapData()
 
+    def train(self, dataset = None):
+        self.nlp = spacy.blank('en')
+        self.trainQuoteClassifier(self.trainSet)
+
+    def test(self):
+        results = self.testQuoteClassifier()
+        self.classifySomeSnippets()
+        return results
+
     def tenLoop(self, batchSize=1, dropout=0.3):
         self.batchSize = batchSize
         self.dropout = dropout
         # train and test ten times in a row, recording accuracy scores for each
-        results = [] # will be list of ten tuples: (precision, recall, f_score)
+        results = [] # will be list of ten lists: [precision, recall, f_score]
         for i in range(0,10):
             self.train()
             results.append(self.test())
             self.bootstrapData()
         return results
-
-    def train(self, dataset = None):
-        self.nlp = spacy.blank('en')
-        self.trainQuoteClassifier(self.trainSet)
 
     def bootstrapData(self):
         dataset = self.jdb.getAll("snippets")
@@ -46,11 +51,6 @@ class Teacher(object):
         # set apart in case we want to do different types of analysis later...let's prep for spacy for now
         self.trainSet = self.makeSpacyReadySchema(trainSet)
         self.testSet = self.makeSpacyReadySchema(testSet)
-
-    def test(self):
-        results = self.testQuoteClassifier()
-        self.classifySomeSnippets()
-        return results
 
     def prepData(self, dataset, testMode=True): # if testMode is false, all data is training data
         cutoff = 0.75 # the line in the full set between train and test sets
@@ -87,11 +87,6 @@ class Teacher(object):
         for d in dataset:
             output.append((d["training_snippet"], {"cats": {"QUOTE": d["is_quote"]}}))
         return output
-
-    # def createRepresentation(self, snippet):
-    #     # for now, just clean the string
-    #     # lots more to come
-    #     return self.cleaner.cleanUpString(snippet)
 
     def trainQuoteClassifier(self, trainSet):
         # focus the trainer
