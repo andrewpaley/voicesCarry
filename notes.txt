@@ -1,0 +1,10 @@
+# GOALS:
+# 1) DONE: recognize individual quotes in text (needs training/testing)
+# 2) DONE: collect more snippets (400+, roughly split 2/1 nonquotes/quotes)
+# 3) DONE (v1): create alternate representations of quotes for learning and classifying -- (a) remove named entities and (b) create parse tree representation
+# 4) DONE: freeze that v3/v4 model and then use it to do a pass pulling quotes and leading/trailing sentences from articles (grok v2)
+# 5) DONE: create test suite and use results in project report
+# --
+# 6) FUTURE TODO (post project submit): try training categorizers to recognize a) subject and b) speaker
+# 7) FUTURE TODO (post project submit): store those in a "context_snippets" table in jumbodb and then do a second pass of training to teach the system to recognize good context
+# 8) FUTURE TODO (post project submit): use the weird quotes as sign of start and end -- removing them lost you some information!
